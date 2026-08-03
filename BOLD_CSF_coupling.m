@@ -9,9 +9,9 @@ maxLagSec  = 18;       % +/- seconds
 maxLagTR   = round(maxLagSec / TR);
 
 % Root folders for each group
-rootControls = '/Volumes/DYNABOOK/BOLD_CSF/Controls_timeseries_atlas';
-rootDLB      = '/Volumes/DYNABOOK/BOLD_CSF/DLB_timeseries_atlas';
-rootPD       = '/Volumes/DYNABOOK/BOLD_CSF/PD_timeseries_atlas';
+rootControls = '/path/to/controls';
+rootDLB      = '/path/to/DLB';
+rootPD       = '/path/to/PD';
 
 % Filename patterns for GM and CSF global z-scored signals
 gmPattern  = '*GM_gBOLD_z.tsv';
