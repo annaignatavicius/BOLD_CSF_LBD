@@ -1,0 +1,7 @@
+Resource Type,Resource Name,Source,Identifier
+Dataset,"De-identified derived data (clinical and cognitive data; whole brain and network level BOLD-CSF coupling values; total intracranial volume, total gray matter volume and regional volumes); includes data dictionary",GitHub,https://github.com/annaignatavicius/BOLD_CSF_LBD/data
+Code,Analysis scripts (code for signal extraction and denoising; quantification of global BOLD-CSF coupling and parcel-wise regional BOLD-CSF coupling); includes README,GitHub,https://github.com/annaignatavicius/BOLD_CSF_LBD/code
+Software,fMRIPrep v24.1.1,Poldrack Lab Stanford,https://doi.org/10.1038/s41592-018-0235-4
+Software,Python v3.10,Python Software Foundation,https://www.python.org/
+Software,Freesurfer v7.3.2,Athinoula A. Martinos Center for Biomedical Imaging ,http://surfer.nmr.mgh.harvard.edu/
+Software,MATLAB R2023a,MathWorks,https://www.mathworks.com/
