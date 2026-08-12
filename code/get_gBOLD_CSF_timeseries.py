@@ -30,13 +30,13 @@ OUT_ROOT = Path(
     "/Volumes/DYNABOOK/BOLD_CSF/DLB_timeseries_atlas_new"
 )
 
-# Template Schaefer-400/7-network atlas in MNI space
+# Gray matter atlas
 ATLAS_MNI = Path(
     "/Volumes/DYNABOOK/BOLD_CSF/HarvardOxford_cerebrumGM_thr25_2mm_mask.nii.gz"
 )
 
 
-# Denoising: linear + quadratic trends, no motion regression, 0.01-0.10 Hz band-pass
+# Denoising
 HIGH_PASS = 0.01
 LOW_PASS = 0.10
 
@@ -74,7 +74,7 @@ def find_runs(root: Path):
         boldref = next(func_dir.glob(BOLDREF_PAT), None)
         coreg = next(func_dir.glob(COREG_PAT), None)
 
-        # session-level anat, or subject-level anat if there is no session transform
+        # session-level anat, or subject-level anat if there is no session 
         anat_dir = bold.parents[1] / "anat"
         h5 = next(anat_dir.glob(MNI_TO_T1_PAT), None) if anat_dir.exists() else None
 
@@ -132,6 +132,42 @@ def warp_atlas_to_bold(atlas_mni: Path,
     return out_mask
 
 
+def intersect_mask_with_functional_fov(mask_path: Path,
+                                      bold_path: Path,
+                                      out_mask: Path):
+    """Intersect the warped GM atlas with the participant's functional field of view."""
+    mask_img = nib.load(str(mask_path))
+    bold_img = nib.load(str(bold_path))
+
+    if mask_img.shape[:3] != bold_img.shape[:3]:
+        raise RuntimeError(
+            f"GM mask shape {mask_img.shape[:3]} != BOLD shape {bold_img.shape[:3]}"
+        )
+
+    if not np.allclose(mask_img.affine, bold_img.affine, atol=1e-4):
+        raise RuntimeError("GM mask and BOLD affines do not match")
+
+    mask = mask_img.get_fdata().astype(bool)
+    bold = bold_img.get_fdata()
+
+    functional_fov = np.any(np.isfinite(bold) & (bold != 0), axis=-1)
+    final_mask = mask & functional_fov
+
+    n_before = int(mask.sum())
+    n_after = int(final_mask.sum())
+    if n_after == 0:
+        raise RuntimeError("GM mask contains zero voxels")
+
+    final_img = nib.Nifti1Image(
+        final_mask.astype(np.uint8),
+        bold_img.affine,
+        bold_img.header,
+    )
+    nib.save(final_img, str(out_mask))
+
+    return out_mask
+
+
 def denoise_timeseries(voxel_ts: np.ndarray, tr: float):
     """Linear + quadratic detrending and 0.01-0.10 Hz filtering."""
     n_tp = voxel_ts.shape[0]
@@ -156,7 +192,13 @@ def extract_clean_timeseries(bold_path: Path,
                              mask_path: Path,
                              out_dir: Path,
                              tag: str):
-    """Extract mask voxels, denoise them, and save voxelwise + mean clean signals."""
+    """
+    Extract mask voxels, denoise them, compute the spatial mean, then
+    temporally z-score the mean signal for coupling analysis.
+
+    Voxelwise signals are saved cleaned but not z-scored so they can be
+    averaged within cortical parcels in get_parcelBOLD.py.
+    """
     bold_img = nib.load(str(bold_path))
     mask_img = nib.load(str(mask_path))
 
@@ -183,7 +225,13 @@ def extract_clean_timeseries(bold_path: Path,
         raise RuntimeError(f"{tag}: mask contains zero voxels")
 
     voxel_clean = denoise_timeseries(voxel_ts, tr)
+
+    # Spatial mean first, then temporal z-scoring.
     mean_clean = voxel_clean.mean(axis=1)
+    mean_sd = mean_clean.std(ddof=1)
+    if not np.isfinite(mean_sd) or mean_sd == 0:
+        raise RuntimeError(f"{tag}: mean signal has zero or invalid SD")
+    mean_z = (mean_clean - mean_clean.mean()) / mean_sd
 
     out_dir.mkdir(parents=True, exist_ok=True)
     base = bold_path.name.removesuffix(".nii.gz")
@@ -197,12 +245,20 @@ def extract_clean_timeseries(bold_path: Path,
         mean_clean,
         fmt="%.8f",
     )
+    np.savetxt(
+        out_dir / f"{base}_{tag}_gBOLD_z.tsv",
+        mean_z,
+        fmt="%.8f",
+    )
 
-    print(f"[{tag}] T={voxel_clean.shape[0]}, V={voxel_clean.shape[1]}")
+    print(
+        f"[{tag}] T={voxel_clean.shape[0]}, V={voxel_clean.shape[1]}, "
+        f"z mean={mean_z.mean():.4f}, z SD={mean_z.std(ddof=1):.4f}"
+    )
 
 
 def find_csf_paths(sub: str, ses: str | None):
-    """Find the existing raw rest BOLD + CSF mask."""
+    """Find the raw resting-state EPI image and manually delineated CSF mask."""
     dirs = []
     if ses:
         dirs.append(CSF_ROOT / sub / ses / "func")
@@ -251,24 +307,39 @@ def main():
         base = run["bold"].name.removesuffix(
             "_space-T1w_desc-preproc_bold.nii.gz"
         )
+        # Keep the direct atlas warp separate from the final mask used for
+        # extraction. The final GM mask is the warped atlas intersected with
+        # this participant's functional field of view.
+        gm_mask_warped = out_dir / f"{base}_GM_atlas_warped.nii.gz"
         gm_mask = out_dir / f"{base}_GM_atlas_epi.nii.gz"
 
-        
-        if not gm_mask.exists():
+        if not gm_mask_warped.exists():
             try:
                 warp_atlas_to_bold(
                     ATLAS_MNI,
                     run["boldref"],
                     run["h5"],
                     run["coreg"],
-                    gm_mask,
+                    gm_mask_warped,
                 )
-                print(f"[GM] wrote atlas mask: {gm_mask.name}")
+                print(f"[GM] wrote warped atlas: {gm_mask_warped.name}")
             except Exception as e:
                 print(f"[skip] {sub} {ses_out}: atlas warp failed: {e}")
                 continue
         else:
-            print(f"[GM] atlas mask exists: {gm_mask.name}")
+            print(f"[GM] warped atlas exists: {gm_mask_warped.name}")
+
+        # Regenerate the final mask so it is always the atlas intersected
+        # with the actual preprocessed BOLD field of view.
+        try:
+            intersect_mask_with_functional_fov(
+                gm_mask_warped,
+                run["bold"],
+                gm_mask,
+            )
+        except Exception as e:
+            print(f"[skip] {sub} {ses_out}: GM FOV intersection failed: {e}")
+            continue
 
         try:
             extract_clean_timeseries(run["bold"], gm_mask, out_dir, "GM")
