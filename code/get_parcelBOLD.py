@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import nibabel as nib
 import SimpleITK as sitk
+from scipy.io import savemat
 
 # Set parameters/settings
 
@@ -27,7 +28,6 @@ GM_VBOLD_SUFFIX   = "_task-rest_space-T1w_desc-preproc_bold_GM_vBOLD_clean.npy" 
 GM_MASK_PATTERN   = "*_GM_atlas_epi.nii.gz"  # must match the mask used to create GM_vBOLD_*.npy
 
 # Save parcel time series (T x 400) and voxel counts per parcel
-SAVE_ZSCORED = True   # z-score each parcel's time series before saving
 MIN_VOXELS_PER_PARCEL = 1
 
 # Functions
@@ -59,7 +59,7 @@ def warp_schaefer_to_bold(atlas_mni_path: Path,
     """
     Warp Schaefer atlas from MNI to subject BOLD (space-T1w boldref) using
     MNI->T1w (h5) and boldref->T1w (txt) transforms. Nearest-neighbour
-    resampling keeps integer labels.
+    resampling.
     """
     print(f"[warp] atlas:   {atlas_mni_path}")
     print(f"[warp] boldref: {boldref_path}")
@@ -93,39 +93,44 @@ def warp_schaefer_to_bold(atlas_mni_path: Path,
 
 def build_parcel_timeseries(func_dir: Path, atlas_dseg_path: Path, n_parcels: int = 400):
     """
-    For a given subject func dir (in TIMESERIES_ROOT), build
-    parcel BOLD time series (T x 400) from GM_vBOLD_raw.npy + atlas_dseg + GM mask.
+    Build cleaned and z-scored parcel BOLD time series (T x 400) from the
+    cleaned voxelwise GM BOLD signal, subject-space Schaefer atlas, and the
+    exact FOV-intersected GM mask used for voxel extraction.
 
     Outputs:
-      - *_parcelBOLD_raw.npy (T x 400)
-      - *_parcelBOLD_z.npy   (T x 400) if SAVE_ZSCORED
-      - *_parcel_nvox.tsv    (400 x 1)
+      - *_parcelBOLD_clean.npy : cleaned parcel means (T x 400)
+      - *_parcelBOLD_z.npy     : temporally z-scored parcel means (T x 400)
+      - *_parcelBOLD_z.mat     : same z-scored data as MATLAB variable parcelBOLD
+      - *_parcel_nvox.tsv      : number of contributing GM voxels per parcel
     """
-    # Find GM vBOLD
-    gm_vbold_files = list(func_dir.glob(f"*{GM_VBOLD_SUFFIX}"))
+    gm_vbold_files = sorted(func_dir.glob(f"*{GM_VBOLD_SUFFIX}"))
     if len(gm_vbold_files) == 0:
-        print(f"[skip] no GM_vBOLD file in {func_dir}")
+        print(f"[skip] no GM_vBOLD_clean file in {func_dir}")
         return
+    if len(gm_vbold_files) > 1:
+        print(f"[warn] multiple GM_vBOLD files; using {gm_vbold_files[0].name}")
     gm_vbold_path = gm_vbold_files[0]
 
-    # GM mask used to define the voxel columns in GM_vBOLD
-    gm_mask_files = list(func_dir.glob(GM_MASK_PATTERN))
+    gm_mask_files = sorted(func_dir.glob(GM_MASK_PATTERN))
     if len(gm_mask_files) == 0:
         print(f"[skip] no GM mask matching {GM_MASK_PATTERN} in {func_dir}")
         return
+    if len(gm_mask_files) > 1:
+        print(f"[warn] multiple GM masks; using {gm_mask_files[0].name}")
     gm_mask_path = gm_mask_files[0]
 
     print(f"[parcel] GM vBOLD: {gm_vbold_path.name}")
     print(f"[parcel] GM mask:  {gm_mask_path.name}")
     print(f"[parcel] Atlas:    {atlas_dseg_path.name}")
 
-    # Load GM vBOLD (T x Vgm)
+    # Cleaned voxelwise GM BOLD (T x Vgm).
     gm_vbold = np.load(gm_vbold_path)
     if gm_vbold.ndim != 2:
-        raise RuntimeError(f"Expected GM vBOLD to be 2D (T x Vgm). Got {gm_vbold.shape}")
+        raise RuntimeError(
+            f"Expected GM vBOLD to be 2D (T x Vgm). Got {gm_vbold.shape}"
+        )
     T, Vgm = gm_vbold.shape
 
-    # Load atlas + GM mask volumes
     atlas_img = nib.load(str(atlas_dseg_path))
     atlas_data = atlas_img.get_fdata().astype(np.int32)
 
@@ -133,45 +138,68 @@ def build_parcel_timeseries(func_dir: Path, atlas_dseg_path: Path, n_parcels: in
     gm_mask_data = gm_mask_img.get_fdata().astype(bool)
 
     if atlas_data.shape != gm_mask_data.shape:
-        raise RuntimeError("Atlas dseg and GM mask shapes differ. Check spaces/resolutions.")
+        raise RuntimeError(
+            "Atlas dseg and GM mask shapes differ. Check spaces/resolutions."
+        )
+    if not np.allclose(atlas_img.affine, gm_mask_img.affine, atol=1e-4):
+        raise RuntimeError(
+            "Atlas dseg and GM mask affines differ. Check spaces/resolutions."
+        )
 
-    # Flatten labels for GM voxels only (same order as columns in GM_vBOLD)
+    # Apply the exact GM mask used by NiftiMasker so each vBOLD column gets
+    # the corresponding Schaefer parcel label.
     labels_1d = atlas_data[gm_mask_data]
     if labels_1d.shape[0] != Vgm:
         raise RuntimeError(
-            f"Number of GM mask voxels ({labels_1d.shape[0]}) != vBOLD columns ({Vgm}).\n"
-            "This almost always means the GM mask you are using here is not the exact mask used "
-            "to extract GM_vBOLD_raw.npy."
+            f"Number of GM mask voxels ({labels_1d.shape[0]}) != "
+            f"vBOLD columns ({Vgm}).\n"
+            "The GM mask must be the exact mask used to extract "
+            "GM_vBOLD_clean.npy."
         )
 
-    # Compute parcel means: output T x 400
     P = n_parcels
-    parcel_ts_raw = np.full((T, P), np.nan, dtype=np.float64)
+    parcel_ts_clean = np.full((T, P), np.nan, dtype=np.float64)
     nvox = np.zeros(P, dtype=np.int32)
 
     for pid in range(1, P + 1):
-        vox = (labels_1d == pid)
+        vox = labels_1d == pid
         n = int(np.sum(vox))
         nvox[pid - 1] = n
         if n < MIN_VOXELS_PER_PARCEL:
             continue
-        parcel_ts_raw[:, pid - 1] = gm_vbold[:, vox].mean(axis=1)
 
-    # Save outputs
+        # Spatial mean of the already-denoised voxelwise BOLD signal.
+        parcel_ts_clean[:, pid - 1] = gm_vbold[:, vox].mean(axis=1)
+
+    # Temporal z-score is applied AFTER averaging voxels within each parcel.
+    mu = np.nanmean(parcel_ts_clean, axis=0, keepdims=True)
+    sd = np.nanstd(parcel_ts_clean, axis=0, ddof=1, keepdims=True)
+    sd[(~np.isfinite(sd)) | (sd == 0)] = np.nan
+    parcel_ts_z = (parcel_ts_clean - mu) / sd
+
     base = gm_vbold_path.name.replace(GM_VBOLD_SUFFIX, "")
-    out_raw = func_dir / f"{base}_parcelBOLD_raw.npy"
-    np.save(out_raw, parcel_ts_raw)
-    np.savetxt(func_dir / f"{base}_parcel_nvox.tsv", nvox, fmt="%d")
-    print(f"[parcel] wrote {out_raw.name}")
 
-    if SAVE_ZSCORED:
-        mu = np.nanmean(parcel_ts_raw, axis=0, keepdims=True)
-        sd = np.nanstd(parcel_ts_raw, axis=0, ddof=1, keepdims=True)
-        sd[sd == 0] = np.nan
-        parcel_ts_z = (parcel_ts_raw - mu) / sd
-        out_z = func_dir / f"{base}_parcelBOLD_z.npy"
-        np.save(out_z, parcel_ts_z)
-        print(f"[parcel] wrote {out_z.name}")
+    out_clean = func_dir / f"{base}_parcelBOLD_clean.npy"
+    out_z_npy = func_dir / f"{base}_parcelBOLD_z.npy"
+    out_z_mat = func_dir / f"{base}_parcelBOLD_z.mat"
+    out_nvox = func_dir / f"{base}_parcel_nvox.tsv"
+
+    np.save(out_clean, parcel_ts_clean.astype(np.float32))
+    np.save(out_z_npy, parcel_ts_z.astype(np.float32))
+
+    # parcelwise_coupling.m expects *_parcelBOLD_z.mat with variable parcelBOLD.
+    savemat(
+        out_z_mat,
+        {"parcelBOLD": parcel_ts_z.astype(np.float32)},
+        do_compression=True,
+    )
+
+    np.savetxt(out_nvox, nvox, fmt="%d")
+
+    print(f"[parcel] wrote {out_clean.name}")
+    print(f"[parcel] wrote {out_z_npy.name}")
+    print(f"[parcel] wrote {out_z_mat.name} [variable: parcelBOLD]")
+    print(f"[parcel] wrote {out_nvox.name}")
 
 
 def main():
