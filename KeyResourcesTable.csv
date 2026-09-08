@@ -1,0 +1,19 @@
+RESOURCE TYPE,RESOURCE NAME,SOURCE,IDENTIFIER,NEW/REUSE,ADDITIONAL INFORMATION
+Dataset,De-identified derived data ,GitHub/Zenodo,https://doi.org/10.5281/zenodo.21897641,New,"Clinical and cognitive data; whole brain and network level BOLD-CSF coupling values; 
+total intracranial volume, total gray matter volume and regional volumes; 
+includes data dictionary. 
+https://github.com/annaignatavicius/BOLD_CSF_LBD/tree/main/data"
+Code,Analysis scripts ,GitHub/Zenodo,https://doi.org/10.5281/zenodo.21897641,New,"Code for signal extraction and denoising; quantification of global BOLD-CSF coupling 
+and parcel-wise regional BOLD-CSF coupling); 
+includes README. 
+https://github.com/annaignatavicius/BOLD_CSF_LBD/tree/main/code"
+Software,fMRIPrep v24.1.1,Poldrack Lab Stanford,"https://doi.org/10.1038/s41592-018-0235-4 
+(RRID:SCR_016216)",Reuse,
+Software,Python v3.10,Python Software Foundation,"https://www.python.org/ 
+(RRID:SCR_008394)",Reuse,
+Software,Freesurfer v7.3.2,Athinoula A. Martinos Center for Biomedical Imaging ,"http://surfer.nmr.mgh.harvard.edu/
+ (RRID:SCR_001847)",Reuse,
+Software,MATLAB R2023a,MathWorks,"https://www.mathworks.com/ 
+(RRID:SCR_001622)",Reuse,
+Protocol,Clinical and neuropsychological assessment in Lewy body disorders,protocols.io,https://dx.doi.org/10.17504/protocols.io.8epv5w336v1b/v1,New,
+Protocol,Structural and resting-state functional MRI acquisition and preprocessing,protocols.io,https://dx.doi.org/10.17504/protocols.io.8epv5w3b6v1b/v1,New,
