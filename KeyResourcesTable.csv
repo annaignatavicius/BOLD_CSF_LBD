@@ -1,9 +1,9 @@
 RESOURCE TYPE,RESOURCE NAME,SOURCE,IDENTIFIER,NEW/REUSE,ADDITIONAL INFORMATION
-Dataset,De-identified derived data ,GitHub/Zenodo,https://doi.org/10.5281/zenodo.21897641,New,"Clinical and cognitive data; whole brain and network level BOLD-CSF coupling values; 
+Dataset,De-identified derived data ,GitHub/Zenodo,https://doi.org/10.5281/zenodo.21897287,New,"Clinical and cognitive data; whole brain and network level BOLD-CSF coupling values; 
 total intracranial volume, total gray matter volume and regional volumes; 
 includes data dictionary. 
 https://github.com/annaignatavicius/BOLD_CSF_LBD/tree/main/data"
-Code,Analysis scripts ,GitHub/Zenodo,https://doi.org/10.5281/zenodo.21897641,New,"Code for signal extraction and denoising; quantification of global BOLD-CSF coupling 
+Code,Analysis scripts ,GitHub/Zenodo,https://doi.org/10.5281/zenodo.21897287,New,"Code for signal extraction and denoising; quantification of global BOLD-CSF coupling 
 and parcel-wise regional BOLD-CSF coupling); 
 includes README. 
 https://github.com/annaignatavicius/BOLD_CSF_LBD/tree/main/code"
