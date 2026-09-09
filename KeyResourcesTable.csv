@@ -11,9 +11,9 @@ Software,fMRIPrep v24.1.1,Poldrack Lab Stanford,"https://doi.org/10.1038/s41592-
 (RRID:SCR_016216)",Reuse,
 Software,Python v3.10,Python Software Foundation,"https://www.python.org/ 
 (RRID:SCR_008394)",Reuse,
-Software,Freesurfer v7.3.2,Athinoula A. Martinos Center for Biomedical Imaging ,"http://surfer.nmr.mgh.harvard.edu/
+Software,FreeSurfer v7.3.2,Athinoula A. Martinos Center for Biomedical Imaging ,"http://surfer.nmr.mgh.harvard.edu/
  (RRID:SCR_001847)",Reuse,
 Software,MATLAB R2023a,MathWorks,"https://www.mathworks.com/ 
 (RRID:SCR_001622)",Reuse,
-Protocol,Clinical and neuropsychological assessment in Lewy body disorders,protocols.io,https://dx.doi.org/10.17504/protocols.io.8epv5w336v1b/v1,New,
-Protocol,Structural and resting-state functional MRI acquisition and preprocessing,protocols.io,https://dx.doi.org/10.17504/protocols.io.8epv5w3b6v1b/v1,New,
+Protocol,Clinical and neuropsychological assessment in Lewy body disorders,protocols.io,https://doi.org/10.17504/protocols.io.8epv5w336v1b/v1,New,
+Protocol,Structural and resting-state functional MRI acquisition and preprocessing,protocols.io,https://doi.org/10.17504/protocols.io.8epv5w3b6v1b/v1,New,
