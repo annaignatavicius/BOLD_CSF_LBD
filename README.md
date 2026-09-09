@@ -88,7 +88,7 @@ The raw anonymized data are available upon reasonable request.
 The analysis pipeline uses the following software (see [Key Resource Table](https://github.com/annaignatavicius/BOLD_CSF_LBD/blob/main/KeyResourcesTable.csv)):
 
 - fMRIPrep 24.1.1 for functional MRI preprocessing
-- Python 3.11.5 for signal extraction, denoising, spatial transformation, and cortical parcellation
+- Python 3.10 for signal extraction, denoising, spatial transformation, and cortical parcellation
 - MATLAB R2023a (version 9.14.0.2254940) for BOLD-CSF cross-correlation analyses
 
 ### MATLAB dependencies:
